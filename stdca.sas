@@ -87,8 +87,6 @@ referenced.*/
 	%GOTO QUIT;
 %END;
 
-/*%END;*/
-
 /*Check that the smooth option is correctly specified*/
 %IF %UPCASE(&smooth)^=NO & %UPCASE(&smooth)^=YES & %LENGTH(&smooth)^=0 %THEN %DO;
 	%PUT ERR%STR()OR:  smooth option must be YES or NO;
@@ -625,12 +623,10 @@ QUIT;
 %QUIT:
 
 /*deleting all macro datasets*/
-/*
 PROC DATASETS LIB=WORK;
 	DELETE stdcamacro_:;
 RUN;
 QUIT;
-*/
 %MEND;
 
 
