@@ -4,6 +4,7 @@ PROGRAM:	STDCA.sas
 PROGRAMMER:	Daniel Sjoberg
 DATE:		6/10/2013
 UPDATED:	2/2/2015 by Emily Vertosick
+            6/23/2021 by Daniel Sjoberg
 NOTE:		stdca is an extension to dca for a survival-time endpoint. 
 			The program calculates the points on a decision curve and optionally
 			plots the decision curve, where <xvars> is the probability of failure 
@@ -11,7 +12,7 @@ NOTE:		stdca is an extension to dca for a survival-time endpoint.
 			model. 
 *************************************************************************************************************/
 
-%MACRO STDCA{	
+%MACRO STDCA(	
 	data=,					/*Name of input dataset*/
 	out=,					/*Name of output dataset containing calculated net benefit*/
 	outcome=, 				/*outcome variable, 1=event, 0=nonevent/censor*/
@@ -86,7 +87,7 @@ referenced.*/
 	%GOTO QUIT;
 %END;
 
-%END;
+/*%END;*/
 
 /*Check that the smooth option is correctly specified*/
 %IF %UPCASE(&smooth)^=NO & %UPCASE(&smooth)^=YES & %LENGTH(&smooth)^=0 %THEN %DO;
