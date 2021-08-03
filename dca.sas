@@ -289,6 +289,10 @@ QUIT;
 		SELECT MEAN(&outcome.) INTO :prevalence FROM dcamacro_data
 	QUIT;
 %END;
+%IF %SYSEVALF(&prevalence. < 0) OR %SYSEVALF(&prevalence. > 1) %THEN %DO;
+	%PUT ERR%STR()OR:  Value specified in prevalence must be between 0 and less than 1.;
+	%GOTO QUIT;
+%END;
 
 *Looping over predictors and calculating net benefit for each of them.;
 %DO abc=1 %TO &varn.;
