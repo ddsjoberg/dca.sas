@@ -206,9 +206,9 @@ DATA stdcamacro_data;
 RUN;
 
 *creating dataset and macro variables with variable labels;
-	PROC CONTENTS DATA=stdcamacro_data  OUT=stdcamacro_contents;
+	PROC CONTENTS DATA=stdcamacro_data OUT=stdcamacro_contents NOPRINT;
 	RUN;
-	DATA _NULL_ test;
+	DATA _NULL_ stdcamacro_test;
 		SET stdcamacro_contents;
 		%DO abc=1 %TO &varn.;
 			if STRIP(UPCASE(name))=STRIP(UPCASE("&&var&abc..")) then id=&abc.;
@@ -255,15 +255,15 @@ If not a probability, then converting it to prob with cox regression;
 		PROC PHREG DATA=stdcamacro_data NOPRINT;
 			MODEL &ttoutcome.*outcome_binary(0) = &&var&abc..; 
 			*saving out survival estimates;
-			BASELINE OUT=stdca_surv_&&var&abc.. COVARIATES=stdcamacro_data (keep=&&var&abc..) SURVIVAL=surv / NOMEAN METHOD=pl;
+			BASELINE OUT=stdcamacro_stdca_surv_&&var&abc.. COVARIATES=stdcamacro_data (keep=&&var&abc..) SURVIVAL=surv / NOMEAN METHOD=pl;
 		RUN;
 
 		PROC SQL NOPRINT UNDO_POLICY=NONE;
 			*within each covariate value, estimating risk at timepoint (minimum value on survival curve before timepoint);
-			CREATE TABLE stdca_surv_&&var&abc..2 AS
+			CREATE TABLE stdcamacro_stdca_surv_&&var&abc..2 AS
 			SELECT DISTINCT 
 					&&var&abc.., 1-MIN(surv) as &&var&abc.._cuminc 
-			FROM stdca_surv_&&var&abc.. (where=(&ttoutcome.<=&timepoint.))
+			FROM stdcamacro_stdca_surv_&&var&abc.. (where=(&ttoutcome.<=&timepoint.))
 			GROUP BY &&var&abc..
 			;
 
@@ -271,7 +271,7 @@ If not a probability, then converting it to prob with cox regression;
 			CREATE TABLE stdcamacro_data (drop=&&var&abc.. rename=(&&var&abc.._cuminc=&&var&abc..)) AS
 			SELECT s.*, r.&&var&abc.._cuminc
 			FROM stdcamacro_data s
-				LEFT JOIN stdca_surv_&&var&abc..2 r
+				LEFT JOIN stdcamacro_stdca_surv_&&var&abc..2 r
 				ON s.&&var&abc..=r.&&var&abc..
 			;
 		QUIT;
@@ -662,23 +662,23 @@ QUIT;
 						);
 	*the CIF macro cannot input a dataset name called 'alldata (where=(time>200))',
 	so we must create another dataset first that is the appropriate subset;
-	DATA stdca_crciest0;
+	DATA stdcamacro_stdca_crciest0;
 		SET &data.;
 	RUN;
 
-	%CIF(data=stdca_crciest0, out=stdca_crciest, time=&ttoutcome., status=&outcome., event=1, options=NOPLOT);
+	%CIF(data=stdcamacro_stdca_crciest0, out=stdcamacro_stdca_crciest, time=&ttoutcome., status=&outcome., event=1, options=NOPLOT);
 
 	PROC SQL NOPRINT;
 		SELECT count(*) INTO :len 
-		FROM stdca_crciest
+		FROM stdcamacro_stdca_crciest
 		WHERE &ttoutcome.<&timepoint.
 		;
 		SELECT count(*) INTO :gtn 
-		FROM stdca_crciest
+		FROM stdcamacro_stdca_crciest
 		WHERE &ttoutcome.>&timepoint.
 		;
 		SELECT max(CIF) INTO :crcuminc_temp 
-		FROM stdca_crciest
+		FROM stdcamacro_stdca_crciest
 		WHERE &ttoutcome.<=&timepoint.
 		;
 	QUIT;

@@ -27,6 +27,7 @@ NOTE:		dca.sas calculates the points on a decision curve and optionally
 	ymin=-0.05,				/*minimum net benefit that will be plotted*/
 	interventionmin=0,		/*minimum reduction in interventions that will be plotted*/
 	smooth=no,				/*use loess smoothing on decision curve graph (yes/no)*/
+	prevalence=,            /*specify the prevalence of the outcome when working with case-control data*/
 	/*GPLOT OPTIONS*/
 	vaxis=,
 	haxis=,
@@ -174,9 +175,9 @@ DATA dcamacro_data;
 RUN;
 
 *creating dataset and macro variables with variable labels;
-	PROC CONTENTS DATA=dcamacro_data  OUT=dcamacro_contents NOPRINT;
+	PROC CONTENTS DATA=dcamacro_data OUT=dcamacro_contents NOPRINT;
 	RUN;
-	DATA _NULL_ test;
+	DATA _NULL_ dcamacro_test;
 		SET dcamacro_contents;
 		%DO abc=1 %TO &varn.;
 			if STRIP(UPCASE(name))=STRIP(UPCASE("&&var&abc..")) then id=&abc.;
@@ -280,6 +281,15 @@ PROC DATASETS LIB=WORK NOPRINT;
 RUN;
 QUIT;
 
+/*calculate prev if not supplied by user*/
+%IF %LENGTH(&prevalence.) = 0 %THEN %DO;
+	*calculating number of true and false positives;
+	 PROC SQL NOPRINT;
+		*counting number of patients above threshold;
+		SELECT MEAN(&outcome.) INTO :prevalence FROM dcamacro_data
+	QUIT;
+%END;
+
 *Looping over predictors and calculating net benefit for each of them.;
 %DO abc=1 %TO &varn.;
 
@@ -296,27 +306,21 @@ QUIT;
 
 		*calculating number of true and false positives;
 	 	PROC SQL NOPRINT;
-			*counting number of patients above threshold;
-			SELECT COUNT(*) INTO :ptn FROM dcamacro_data WHERE &&var&abc..>=&threshold.;
-
-			SELECT MEAN(&outcome.)*COUNT(*) INTO :tp FROM dcamacro_data WHERE &&var&abc..>=&threshold.;
-			SELECT (1-MEAN(&outcome.))*COUNT(*) INTO :fp FROM dcamacro_data WHERE &&var&abc..>=&threshold.;
+			*test_pos rate among cases;
+			SELECT MEAN(&&var&abc..>=&threshold.) INTO :test_pos_case FROM dcamacro_data WHERE &outcome.;
+			*test_pos rate among non-cases;
+			SELECT MEAN(&&var&abc..>=&threshold.) INTO :test_pos_noncase FROM dcamacro_data WHERE ^&outcome.;
 		QUIT;
-
-		*if there are no patient above threshold then net benefit is 0;
-		DATA _NULL_;
-			IF &ptn.=0 THEN DO;
-				CALL SYMPUTX("tp",put(0,BEST12.));
-				CALL SYMPUTX("fp",put(0,BEST12.));
-			END;
-		RUN;
+		%LET tp_rate = %SYSEVALF(&test_pos_case.    * &prevalence.);
+		%LET fp_rate = %SYSEVALF(&test_pos_noncase. * (1 - &prevalence.));
+		
 
 		*creating one line dataset with nb.;
 		DATA dcamacro_temp;
 			length model $100.;
-			model="&&var&abc..";
-			threshold=ROUND(&threshold.,0.00001);
-			nb=&tp./&n. - &fp./&n.*&threshold./(1-&threshold.);
+			model = "&&var&abc..";
+			threshold = ROUND(&threshold.,0.00001);
+			nb = &tp_rate. - &fp_rate. * &threshold. / (1 - &threshold.);
 		RUN;
 
 		*creating dataset with nb for models only.;
@@ -508,11 +512,9 @@ QUIT;
 %QUIT:
 
 /*deleting all macro datasets*/
-/*
 PROC DATASETS LIB=WORK;
 	DELETE dcamacro_:;
 RUN;
 QUIT;
-*/
 
 %MEND;
