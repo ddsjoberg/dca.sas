@@ -191,10 +191,6 @@ PROC SQL NOPRINT;
 	*Getting number of observations;
 	SELECT COUNT(*) INTO :n FROM dcamacro_data;
 
-	*Calculate number of true positives and false positives;
-	SELECT MEAN(&outcome.)*COUNT(*) INTO :tp FROM dcamacro_data;
-	SELECT (1-MEAN(&outcome.))*COUNT(*) INTO :fp FROM dcamacro_data;
-
 	*Getting min and max of outcome;
 	SELECT MAX(&outcome.) INTO :outcomemax FROM dcamacro_data;
 	SELECT MIN(&outcome.) INTO :outcomemin FROM dcamacro_data;
@@ -264,7 +260,7 @@ DATA dcamacro_nblong (DROP=t);
 
 		*creating the TREAT ALL row;
 		model="all";
-		nb=&tp./&n. - &fp./&n.*(threshold/(1-threshold));
+		nb=&prevalence. - (1 - &prevalence.) * (threshold/(1-threshold));
 		output;
 
 		*creating the TREAT NONE row;
@@ -318,7 +314,6 @@ QUIT;
 		%LET tp_rate = %SYSEVALF(&test_pos_case.    * &prevalence.);
 		%LET fp_rate = %SYSEVALF(&test_pos_noncase. * (1 - &prevalence.));
 		
-
 		*creating one line dataset with nb.;
 		DATA dcamacro_temp;
 			length model $100.;
@@ -516,9 +511,10 @@ QUIT;
 %QUIT:
 
 /*deleting all macro datasets*/
-PROC DATASETS LIB=WORK;
+PROC DATASETS LIB=WORK NOPRINT;
 	DELETE dcamacro_:;
 RUN;
 QUIT;
 
 %MEND;
+
