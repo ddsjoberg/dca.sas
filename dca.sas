@@ -251,6 +251,19 @@ DATA _NULL_;
 	END;	
 RUN;
 
+/*calculate prev if not supplied by user*/
+%IF %LENGTH(&prevalence.) = 0 %THEN %DO;
+	*calculating number of true and false positives;
+	 PROC SQL NOPRINT;
+		*counting number of patients above threshold;
+		SELECT MEAN(&outcome.) INTO :prevalence FROM dcamacro_data
+	QUIT;
+%END;
+%IF %SYSEVALF(&prevalence. < 0) OR %SYSEVALF(&prevalence. > 1) %THEN %DO;
+	%PUT ERR%STR()OR:  Value specified in prevalence must be between 0 and less than 1.;
+	%GOTO QUIT;
+%END;
+
 *creating dataset that is one line per threshold for the treat all and treat none strategies;
 DATA dcamacro_nblong (DROP=t);
 	LENGTH model $100.;
@@ -276,19 +289,6 @@ PROC DATASETS LIB=WORK NOPRINT;
 	DELETE dcamacro_models:;
 RUN;
 QUIT;
-
-/*calculate prev if not supplied by user*/
-%IF %LENGTH(&prevalence.) = 0 %THEN %DO;
-	*calculating number of true and false positives;
-	 PROC SQL NOPRINT;
-		*counting number of patients above threshold;
-		SELECT MEAN(&outcome.) INTO :prevalence FROM dcamacro_data
-	QUIT;
-%END;
-%IF %SYSEVALF(&prevalence. < 0) OR %SYSEVALF(&prevalence. > 1) %THEN %DO;
-	%PUT ERR%STR()OR:  Value specified in prevalence must be between 0 and less than 1.;
-	%GOTO QUIT;
-%END;
 
 *Looping over predictors and calculating net benefit for each of them.;
 %DO abc=1 %TO &varn.;
