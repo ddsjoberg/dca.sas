@@ -467,19 +467,19 @@ DATA dcamacro_plot2;
 RUN;
 
 *create dataset to hold format for "ordernum" variable for graph;
-DATA cntlin(
+DATA dcamacro_cntlin(
 	KEEP=fmtname start label);
 	SET dcamacro_plot2(RENAME=(_LABEL_=label ordernum=start));
 	fmtname="order";
 RUN;
 
 *sort format dataset and keep unique observations only;
-PROC SORT DATA=cntlin OUT=cntlin NODUPKEYS;
+PROC SORT DATA=dcamacro_cntlin OUT=dcamacro_cntlin NODUPKEYS;
 	BY start;
 RUN;
 
 *load format for order number variable;
-PROC FORMAT CNTLIN=cntlin;
+PROC FORMAT CNTLIN=dcamacro_cntlin;
 RUN;
 
 *drop unnecessary "piece*" variables and format "ordernum" variable for graph legend;
