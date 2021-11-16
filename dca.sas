@@ -27,6 +27,7 @@ NOTE:		dca.sas calculates the points on a decision curve and optionally
 	ymin=-0.05,				/*minimum net benefit that will be plotted*/
 	interventionmin=0,		/*minimum reduction in interventions that will be plotted*/
 	smooth=no,				/*use loess smoothing on decision curve graph (yes/no)*/
+	prevalence=,            /*specify the prevalence of the outcome when working with case-control data*/
 	/*GPLOT OPTIONS*/
 	vaxis=,
 	haxis=,
@@ -174,9 +175,9 @@ DATA dcamacro_data;
 RUN;
 
 *creating dataset and macro variables with variable labels;
-	PROC CONTENTS DATA=dcamacro_data  OUT=dcamacro_contents NOPRINT;
+	PROC CONTENTS DATA=dcamacro_data OUT=dcamacro_contents NOPRINT;
 	RUN;
-	DATA _NULL_ test;
+	DATA _NULL_ dcamacro_test;
 		SET dcamacro_contents;
 		%DO abc=1 %TO &varn.;
 			if STRIP(UPCASE(name))=STRIP(UPCASE("&&var&abc..")) then id=&abc.;
@@ -189,10 +190,6 @@ PROC SQL NOPRINT;
 
 	*Getting number of observations;
 	SELECT COUNT(*) INTO :n FROM dcamacro_data;
-
-	*Calculate number of true positives and false positives;
-	SELECT MEAN(&outcome.)*COUNT(*) INTO :tp FROM dcamacro_data;
-	SELECT (1-MEAN(&outcome.))*COUNT(*) INTO :fp FROM dcamacro_data;
 
 	*Getting min and max of outcome;
 	SELECT MAX(&outcome.) INTO :outcomemax FROM dcamacro_data;
@@ -254,6 +251,19 @@ DATA _NULL_;
 	END;	
 RUN;
 
+/*calculate prev if not supplied by user*/
+%IF %LENGTH(&prevalence.) = 0 %THEN %DO;
+	*calculating number of true and false positives;
+	 PROC SQL NOPRINT;
+		*counting number of patients above threshold;
+		SELECT MEAN(&outcome.) INTO :prevalence FROM dcamacro_data
+	QUIT;
+%END;
+%IF %SYSEVALF(&prevalence. < 0) OR %SYSEVALF(&prevalence. > 1) %THEN %DO;
+	%PUT ERR%STR()OR:  Value specified in prevalence must be between 0 and less than 1.;
+	%GOTO QUIT;
+%END;
+
 *creating dataset that is one line per threshold for the treat all and treat none strategies;
 DATA dcamacro_nblong (DROP=t);
 	LENGTH model $100.;
@@ -263,7 +273,7 @@ DATA dcamacro_nblong (DROP=t);
 
 		*creating the TREAT ALL row;
 		model="all";
-		nb=&tp./&n. - &fp./&n.*(threshold/(1-threshold));
+		nb=&prevalence. - (1 - &prevalence.) * (threshold/(1-threshold));
 		output;
 
 		*creating the TREAT NONE row;
@@ -296,27 +306,20 @@ QUIT;
 
 		*calculating number of true and false positives;
 	 	PROC SQL NOPRINT;
-			*counting number of patients above threshold;
-			SELECT COUNT(*) INTO :ptn FROM dcamacro_data WHERE &&var&abc..>=&threshold.;
-
-			SELECT MEAN(&outcome.)*COUNT(*) INTO :tp FROM dcamacro_data WHERE &&var&abc..>=&threshold.;
-			SELECT (1-MEAN(&outcome.))*COUNT(*) INTO :fp FROM dcamacro_data WHERE &&var&abc..>=&threshold.;
+			*test_pos rate among cases;
+			SELECT MEAN(&&var&abc..>=&threshold.) INTO :test_pos_case FROM dcamacro_data WHERE &outcome.;
+			*test_pos rate among non-cases;
+			SELECT MEAN(&&var&abc..>=&threshold.) INTO :test_pos_noncase FROM dcamacro_data WHERE ^&outcome.;
 		QUIT;
-
-		*if there are no patient above threshold then net benefit is 0;
-		DATA _NULL_;
-			IF &ptn.=0 THEN DO;
-				CALL SYMPUTX("tp",put(0,BEST12.));
-				CALL SYMPUTX("fp",put(0,BEST12.));
-			END;
-		RUN;
-
+		%LET tp_rate = %SYSEVALF(&test_pos_case.    * &prevalence.);
+		%LET fp_rate = %SYSEVALF(&test_pos_noncase. * (1 - &prevalence.));
+		
 		*creating one line dataset with nb.;
 		DATA dcamacro_temp;
 			length model $100.;
-			model="&&var&abc..";
-			threshold=ROUND(&threshold.,0.00001);
-			nb=&tp./&n. - &fp./&n.*&threshold./(1-&threshold.);
+			model = "&&var&abc..";
+			threshold = ROUND(&threshold.,0.00001);
+			nb = &tp_rate. - &fp_rate. * &threshold. / (1 - &threshold.);
 		RUN;
 
 		*creating dataset with nb for models only.;
@@ -464,19 +467,19 @@ DATA dcamacro_plot2;
 RUN;
 
 *create dataset to hold format for "ordernum" variable for graph;
-DATA cntlin(
+DATA dcamacro_cntlin(
 	KEEP=fmtname start label);
 	SET dcamacro_plot2(RENAME=(_LABEL_=label ordernum=start));
 	fmtname="order";
 RUN;
 
 *sort format dataset and keep unique observations only;
-PROC SORT DATA=cntlin OUT=cntlin NODUPKEYS;
+PROC SORT DATA=dcamacro_cntlin OUT=dcamacro_cntlin NODUPKEYS;
 	BY start;
 RUN;
 
 *load format for order number variable;
-PROC FORMAT CNTLIN=cntlin;
+PROC FORMAT CNTLIN=dcamacro_cntlin;
 RUN;
 
 *drop unnecessary "piece*" variables and format "ordernum" variable for graph legend;
@@ -508,11 +511,10 @@ QUIT;
 %QUIT:
 
 /*deleting all macro datasets*/
-/*
-PROC DATASETS LIB=WORK;
+PROC DATASETS LIB=WORK NOPRINT;
 	DELETE dcamacro_:;
 RUN;
 QUIT;
-*/
 
 %MEND;
+
