@@ -32,7 +32,7 @@ Call the macros with
 
 ## Release History
 
-#### v0.3.0 (development version)
+#### v0.3.0 (2021-11-16)
 
 * Added `prevalence=` argument to the `%DCA()` macro. Users working with case-control data can now specify the population prevalence.
 
