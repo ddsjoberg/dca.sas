@@ -24,7 +24,7 @@ NOTE:		stdca is an extension to dca for a survival-time endpoint.
 	xby=0.01,				/*By Value for Threshold Values, this is legnth of the interval at which the Net Benefit is calculated.*/
 	harm=,					/*list of harms to apply to each predictor*/
 	intervention=no,		/*calculate number of interventions avoided (yes/no)*/
-	interventionper=100,	/*Number of intervetion per xx patients*/
+	interventionper=1,		/*Number of intervetion per xx patients*/
 	probability=,			/*list indicating whether each predictor is a probability*/
 	graph=yes,				/*indicates if graph is requested or suppressed (yes/no)*/
 	ymin=-0.05,				/*minimum net benefit that will be plotted*/
@@ -500,6 +500,11 @@ DATA stdcamacro_nb &out.;
 	label all="Net Benefit: Treat All";
 	label none="Net Benefit: Treat None";
 
+	all_i=(all-all)*&interventionper./(threshold/(1-threshold));
+    none_i=(none-all)*&interventionper./(threshold/(1-threshold));
+    label all_i="Intervention: Treat All";
+	label none_i="Intervention: Treat None";
+
 	%DO abc=1 %TO &varn.;
 		*correcting NB if harms are specified and labelling Net Benefit;
 		label &&var&abc..="Net Benefit: &&varlab&abc..";
@@ -542,11 +547,17 @@ RUN;
 	%LET plotrange=&ymin. <= col1;
 %END;
 %ELSE %DO;
-	%LET ylabel=Net reduction in interventions per &interventionper. patients;
+	%IF "&interventionper."="1" %THEN %DO;
+		%LET ylabel=Net reduction in interventions;
+	%END;
+	%ELSE %DO;
+		%LET ylabel=Net reduction in interventions per &interventionper. patients;
+	%END;
 	%LET plotrange=col1 >= &interventionmin.;
-	%DO abc=1 %TO &varn.;
-		%IF &abc.=1 %THEN %LET plotlist=&&var&abc.._i;
-		%ELSE %LET plotlist=&plotlist. &&var&abc.._i;
+
+	%LET plotlist=all_i none_i;
+	%DO g=1 %TO &varn.;
+		%LET plotlist=&plotlist. &&var&g.._i;
 	%END;
 %END;
 
@@ -572,15 +583,19 @@ DATA stdcamacro_plot2;
 	*This creates a numeric variable that corresponds to the order that the variables were
 	entered into the STDCA macro command.;
 	%DO order=1 %TO &varn.+2;
-		piece&order.=SCAN("all none &predictors.",&order.," ");
-		IF _name_=piece&order. THEN ordernum=&order.;
-	%END;
+		piece&order.=SCAN("all none &predictors.",&order.,' ');
 
+		%IF %UPCASE(&intervention.)=NO %THEN %DO;
+			IF _name_=piece&order. THEN ordernum=&order.;
+		%END;
+		%ELSE %DO;
+			IF _name_=CAT(STRIP(piece&order.), "_i") THEN ordernum=&order.;
+		%END;
+	%END;
 RUN;
 
 *create dataset to hold format for "ordernum" variable for graph;
-DATA cntlin(
-	KEEP=fmtname start label);
+DATA cntlin (KEEP=fmtname start label);
 	SET stdcamacro_plot2(RENAME=(_LABEL_=label ordernum=start));
 	fmtname="order";
 RUN;
@@ -623,7 +638,7 @@ QUIT;
 %QUIT:
 
 /*deleting all macro datasets*/
-PROC DATASETS LIB=WORK;
+PROC DATASETS LIB=WORK NOPRINT;
 	DELETE stdcamacro_:;
 RUN;
 QUIT;
