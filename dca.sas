@@ -21,7 +21,7 @@ NOTE:		dca.sas calculates the points on a decision curve and optionally
 	xby=0.01,				/*By Value for Threshold Values, this is length of the interval at which the Net Benefit is calculated.*/
 	harm=,					/*list of harms to apply to each predictor*/
 	intervention=no,		/*calculate number of interventions avoided (yes/no)*/
-	interventionper=100,	/*Number of intervention per xx patients*/
+	interventionper=1,	    /*Number of intervention per xx patients*/
 	probability=,			/*list indicating whether each predictor is a probability (e.g. if checking two variables and one is a probability and the other is not, then one would write: probability=yes no  */
 	graph=yes,				/*indicates if graph is requested or suppressed (yes/no)*/
 	ymin=-0.05,				/*minimum net benefit that will be plotted*/
@@ -388,6 +388,12 @@ DATA dcamacro_nb &out.;
 	label all="Net Benefit: Treat All";
 	label none="Net Benefit: Treat None";
 
+    all_i=(all-all)*&interventionper./(threshold/(1-threshold));
+    none_i=(none-all)*&interventionper./(threshold/(1-threshold));
+    label all_i="Intervention: Treat All";
+	label none_i="Intervention: Treat None";
+
+
 	%DO abc=1 %TO &varn.;
 
 		*correcting NB if harms are specified and labelling Net Benefit;
@@ -431,11 +437,17 @@ RUN;
 	%LET plotrange=&ymin. <= col1;
 %END;
 %ELSE %DO;
-	%LET ylabel=Net reduction in interventions per &interventionper. patients;
+	%IF "&interventionper."="1" %THEN %DO;
+		%LET ylabel=Net reduction in interventions;
+	%END;
+	%ELSE %DO;
+		%LET ylabel=Net reduction in interventions per &interventionper. patients;
+	%END;
 	%LET plotrange=col1 >= &interventionmin.;
+
+	%LET plotlist=all_i none_i;
 	%DO g=1 %TO &varn.;
-		%IF &g.=1 %THEN %LET plotlist=&&var&g.._i;
-		%ELSE %LET plotlist=&plotlist. &&var&g.._i;
+		%LET plotlist=&plotlist. &&var&g.._i;
 	%END;
 %END;
 
@@ -446,7 +458,6 @@ PROC TRANSPOSE DATA=dcamacro_nb OUT=dcamacro_plot;
 RUN;
 
 **** ORDERING CATEGORIES IN GPLOT ****;
-
 *labeling transpose variables;
 DATA dcamacro_plot2;
 	SET dcamacro_plot;
@@ -461,9 +472,14 @@ DATA dcamacro_plot2;
 	entered into the DCA macro command.;
 	%DO order=1 %TO &varn.+2;
 		piece&order.=SCAN("all none &predictors.",&order.,' ');
-		IF _name_=piece&order. THEN ordernum=&order.;
-	%END;
 
+		%IF %UPCASE(&intervention.)=NO %THEN %DO;
+			IF _name_=piece&order. THEN ordernum=&order.;
+		%END;
+		%ELSE %DO;
+			IF _name_=CAT(STRIP(piece&order.), "_i") THEN ordernum=&order.;
+		%END;
+	%END;
 RUN;
 
 *create dataset to hold format for "ordernum" variable for graph;
@@ -492,7 +508,6 @@ PROC SORT DATA=dcamacro_plot2;
 RUN;
 
 /*Plotting DCA*/
-
 PROC GPLOT DATA=dcamacro_plot2;
 	AXIS1 &vaxis. LABEL=(ANGLE=90) MINOR=NONE;
 	AXIS2 &haxis. MINOR=NONE;

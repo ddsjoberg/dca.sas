@@ -32,6 +32,12 @@ Call the macros with
 
 ## Release History
 
+#### v0.4.0 (2022-12-28)
+
+* The net interventions avoided figures have new defaults (breaking change):
+  * The figure will now include the treat all and treat none reference lines.
+  * The nper now defaults to one.
+
 #### v0.3.0 (2021-11-16)
 
 * Added `prevalence=` argument to the `%DCA()` macro. Users working with case-control data can now specify the population prevalence.
